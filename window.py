@@ -6,6 +6,8 @@ import tempfile
 import typing as typ
 import uuid
 
+import time
+
 # noinspection PyPep8Naming
 import OpenGL.GL as gl
 import PIL.Image as Image
@@ -55,7 +57,8 @@ class Window(abc.ABC):
     def __init__(self):
         self._pre_init()
 
-        super().__init__()
+        self._prev_time = time.time()
+        self._delta_time = 0.0
         self._window, self._renderer = self._init_glfw()
 
         glfw.set_window_refresh_callback(self.window, self._resize_event)
@@ -96,6 +99,13 @@ class Window(abc.ABC):
         return str(cls._IMGUI_INI_DIR / f'{cls._WINDOW_ID_PERSISTENT}.ini')
 
     @classmethod
+    def _set_glfw_window_hints(cls) -> None:
+        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, cls._GLFW_CONTEXT_VERSION_MAJOR)
+        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, cls._GLFW_CONTEXT_VERSION_MINOR)
+        glfw.window_hint(glfw.OPENGL_PROFILE, cls._GLFW_OPENGL_PROFILE)
+        glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, gl.GL_TRUE)
+
+    @classmethod
     def _init_glfw(cls) -> tuple['GLFWwindow', GlfwRenderer]:
         """
         Initialises GLFW.
@@ -110,11 +120,7 @@ class Window(abc.ABC):
         else:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(str(cls._WINDOW_ID_UNIQUE))
 
-        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, cls._GLFW_CONTEXT_VERSION_MAJOR)
-        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, cls._GLFW_CONTEXT_VERSION_MINOR)
-        glfw.window_hint(glfw.OPENGL_PROFILE, cls._GLFW_OPENGL_PROFILE)
-
-        glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, gl.GL_TRUE)
+        cls._set_glfw_window_hints()
 
         # Create a windowed mode window and its OpenGL context
         window = glfw.create_window(int(cls._WINDOW_WIDTH), int(cls._WINDOW_HEIGHT), cls._WINDOW_TITLE, None, None)
@@ -150,6 +156,10 @@ class Window(abc.ABC):
     def size(self) -> tuple[int, int]:
         return glfw.get_window_size(self.window)
 
+    @property
+    def position(self):
+        return glfw.get_window_pos(self.window)
+
     # noinspection PyUnusedLocal
     def _resize_event(self, window: 'GLFWwindow', *args, **kwargs) -> None:
         self._draw()
@@ -184,6 +194,9 @@ class Window(abc.ABC):
 
     def _glfw_loop(self) -> None:
         while not glfw.window_should_close(self.window):
+            new_time = time.time()
+            self._delta_time = new_time - self._prev_time
+            self._prev_time = new_time
             glfw.poll_events()
             self._renderer.process_inputs()
             if imgui.get_io().want_save_ini_settings:
